@@ -319,6 +319,8 @@ func (s *Store) listAndWatch(apiOp *types.APIRequest, client dynamic.ResourceInt
 				if err == nil {
 					result <- s.toAPIEvent(apiOp, schema, watch.Modified, obj)
 				}
+				logrus.Debugf("notifier watch error: %v", err)
+				returnErr(errors.Wrapf(err, "notifier watch error: %v", err), result)
 			}
 			return fmt.Errorf("closed")
 		})
@@ -327,6 +329,12 @@ func (s *Store) listAndWatch(apiOp *types.APIRequest, client dynamic.ResourceInt
 	eg.Go(func() error {
 		for event := range watcher.ResultChan() {
 			if event.Type == watch.Error {
+				if status, ok := event.Object.(*metav1.Status); ok {
+					logrus.Debugf("event watch error: %s", status.Message)
+					returnErr(errors.Wrapf(err, "event watch error: %+v", event), result)
+				} else {
+					logrus.Debugf("event watch error: could not decode event object %T", event.Object)
+				}
 				continue
 			}
 			result <- s.toAPIEvent(apiOp, schema, event.Type, event.Object)
