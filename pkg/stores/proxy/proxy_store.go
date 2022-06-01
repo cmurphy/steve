@@ -331,9 +331,10 @@ func (s *Store) listAndWatch(apiOp *types.APIRequest, client dynamic.ResourceInt
 				obj, err := s.byID(apiOp, schema, rel.Namespace, rel.Name)
 				if err == nil {
 					result <- s.toAPIEvent(apiOp, schema, watch.Modified, obj)
+				} else {
+					logrus.Debugf("notifier watch error: %v", err)
+					returnErr(errors.Wrapf(err, "notifier watch error: %v", err), result)
 				}
-				logrus.Debugf("notifier watch error: %v", err)
-				returnErr(errors.Wrapf(err, "notifier watch error: %v", err), result)
 			}
 			return fmt.Errorf("closed")
 		})
@@ -344,7 +345,7 @@ func (s *Store) listAndWatch(apiOp *types.APIRequest, client dynamic.ResourceInt
 			if event.Type == watch.Error {
 				if status, ok := event.Object.(*metav1.Status); ok {
 					logrus.Debugf("event watch error: %s", status.Message)
-					returnErr(errors.Wrapf(err, "event watch error: %+v", event), result)
+					returnErr(fmt.Errorf("event watch error: %+v", event), result)
 				} else {
 					logrus.Debugf("event watch error: could not decode event object %T", event.Object)
 				}
