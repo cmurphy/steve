@@ -30,3 +30,9 @@ func k8sAPI(sf schema.Factory, apiOp *types.APIRequest) {
 func apiRoot(sf schema.Factory, apiOp *types.APIRequest) {
 	apiOp.Type = "apiRoot"
 }
+
+func k8sProjectsAPI(sf schema.Factory, apiOp *types.APIRequest) {
+	vars := mux.Vars(apiOp.Request)
+	apiOp.Type = vars["type"]
+	apiOp.Namespace = "projects:" + vars["projects"]
+}

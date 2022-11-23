@@ -145,7 +145,9 @@ func setup(ctx context.Context, server *Server) error {
 	summaryCache := summarycache.New(sf, ccache)
 	summaryCache.Start(ctx)
 
-	for _, template := range resources.DefaultSchemaTemplates(cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery()) {
+	nsCache := server.controllers.Core.Namespace().Cache()
+
+	for _, template := range resources.DefaultSchemaTemplates(cf, nsCache, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery()) {
 		sf.AddTemplate(template)
 	}
 

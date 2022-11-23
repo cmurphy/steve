@@ -3,13 +3,16 @@ package proxy
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/stores/partition"
+	wranglercorev1 "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/kv"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 )
@@ -35,6 +38,7 @@ func (p Partition) Name() string {
 
 // rbacPartitioner is an implementation of the partition.Partioner interface.
 type rbacPartitioner struct {
+	namespaces wranglercorev1.NamespaceCache
 	proxyStore *Store
 }
 
@@ -73,6 +77,20 @@ func (p *rbacPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, 
 					Names:       sets.NewString(name),
 				},
 			}, nil
+		}
+		if strings.HasPrefix(apiOp.Namespace, "projects:") {
+			projects := strings.Split(strings.TrimPrefix(apiOp.Namespace, "projects:"), ",")
+			var namespaces []string
+			for _, prj := range projects {
+				nss, err := p.namespaces.List(labels.Set{"field.cattle.io/projectId": prj}.AsSelector())
+				if err != nil {
+					return nil, fmt.Errorf("invalid project %s, got error: %w", prj, err)
+				}
+				for _, n := range nss {
+					namespaces = append(namespaces, n.Name)
+				}
+			}
+			apiOp.Namespace = strings.Join(namespaces, ",")
 		}
 		partitions, passthrough := isPassthrough(apiOp, schema, verb)
 		if passthrough {
@@ -130,24 +148,28 @@ func (b *byNameOrNamespaceStore) Watch(apiOp *types.APIRequest, schema *types.AP
 // or if the results need to be partitioned by namespace and name based on the requester's access.
 func isPassthrough(apiOp *types.APIRequest, schema *types.APISchema, verb string) ([]partition.Partition, bool) {
 	accessListByVerb, _ := attributes.Access(schema).(accesscontrol.AccessListByVerb)
-	if accessListByVerb.All(verb) {
+	if accessListByVerb.All(verb) && !strings.Contains(apiOp.Namespace, ",") {
 		return nil, true
 	}
 
 	resources := accessListByVerb.Granted(verb)
+
+	var result []partition.Partition
+
 	if apiOp.Namespace != "" {
 		if resources[apiOp.Namespace].All {
 			return nil, true
 		}
-		return []partition.Partition{
-			Partition{
-				Namespace: apiOp.Namespace,
-				Names:     resources[apiOp.Namespace].Names,
-			},
-		}, false
+		namespaces := strings.Split(apiOp.Namespace, ",")
+		for _, n := range namespaces {
+			result = append(result, Partition{
+				Namespace: n,
+				All:       resources[n].All || accessListByVerb.All(verb),
+				Names:     resources[n].Names,
+			})
+		}
+		return result, false
 	}
-
-	var result []partition.Partition
 
 	if attributes.Namespaced(schema) {
 		for k, v := range resources {

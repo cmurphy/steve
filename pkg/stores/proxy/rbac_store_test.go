@@ -238,6 +238,41 @@ func TestAll(t *testing.T) {
 				},
 			},
 		},
+		/*
+			// TODO
+			{
+				name: "by projects",
+				apiOp: &types.APIRequest{
+					Namespace: "projects:p1",
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "foo",
+						Attributes: map[string]interface{}{
+							"namespaced": true,
+							"access": accesscontrol.AccessListByVerb{
+								"list": accesscontrol.AccessList{
+									accesscontrol.Access{
+										Namespace:    "*",
+										ResourceName: "*",
+									},
+								},
+							},
+						},
+					},
+				},
+				wantPartitions: []partition.Partition{
+					Partition{
+						Namespace: "n1",
+						All:       true,
+					},
+					Partition{
+						Namespace: "n2",
+						All:       true,
+					},
+				},
+			},
+		*/
 	}
 
 	for _, test := range tests {

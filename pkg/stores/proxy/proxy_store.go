@@ -19,6 +19,7 @@ import (
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/partition"
 	"github.com/rancher/wrangler/pkg/data"
+	wranglercorev1 "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/schemas/validation"
 	"github.com/rancher/wrangler/pkg/summary"
 	"github.com/sirupsen/logrus"
@@ -72,11 +73,12 @@ type Store struct {
 }
 
 // NewProxyStore returns a wrapped types.Store.
-func NewProxyStore(clientGetter ClientGetter, notifier RelationshipNotifier, lookup accesscontrol.AccessSetLookup) types.Store {
+func NewProxyStore(clientGetter ClientGetter, nsCache wranglercorev1.NamespaceCache, notifier RelationshipNotifier, lookup accesscontrol.AccessSetLookup) types.Store {
 	return &errorStore{
 		Store: &WatchRefresh{
 			Store: partition.NewStore(
 				&rbacPartitioner{
+					namespaces: nsCache,
 					proxyStore: &Store{
 						clientGetter: clientGetter,
 						notifier:     notifier,
