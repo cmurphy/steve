@@ -136,7 +136,10 @@ func (s *Store) listPartition(ctx context.Context, apiOp *types.APIRequest, sche
 
 	values := req.Request.URL.Query()
 	values.Set("continue", cont)
-	values.Set("revision", revision)
+	if revision != "" {
+		values.Set("resourceVersion", revision)
+		values.Set("resourceVersionMatch", "Exact") // supported since k8s 1.19
+	}
 	if limit > 0 {
 		values.Set("limit", strconv.Itoa(limit))
 	} else {
@@ -184,11 +187,14 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 		}
 	}
 	if list == nil { // did not look in cache or was not found in cache
-		stream, err := lister.List(apiOp.Context(), opts.ChunkSize, opts.Resume)
+		stream, err := lister.List(apiOp.Context(), opts.ChunkSize, opts.Resume, opts.Revision)
 		if err != nil {
 			return result, err
 		}
 		list = listprocessor.FilterList(stream, opts.Filters)
+		if lister.Err() != nil {
+			return result, lister.Err()
+		}
 		list = listprocessor.SortList(list, opts.Sort)
 		key.revision = lister.Revision()
 		listToCache := &unstructured.UnstructuredList{
